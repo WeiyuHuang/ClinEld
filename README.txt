@@ -4,4 +4,4 @@ RawData_matlab contains files reformated into Matlab structure from RawData. In 
  directly .
 
 ProcessedData are not raw data, rather intermediate results, such as diffused signals on the brain network. Can be used
-to accelerate running speed.
+to accelerate running speed
