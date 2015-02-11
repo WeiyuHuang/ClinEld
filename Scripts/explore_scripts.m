@@ -243,8 +243,8 @@ data = signal.data;
 
 % Define parameters here.
 %
-diffusion_rate_array = [0, linspace(1e-6, 1e-4, 5)];
-signal_type = 'FA+GM';
+diffusion_rate_array = [0, logspace(-6, 1, 20)];
+signal_type = 'DC+FA+GM';
 
 addpath ../Scripts/libsvm-3.19/matlab/;
 result = zeros(length(diffusion_rate_array), 1);
@@ -261,17 +261,20 @@ end
 
 %% subgroup classification
 
+signal_type = 'degree_centrality';
+subgroup_type = 'Path';
+diffusion_rate_array = [0, logspace(-6, 1, 20)];
+
+
 addpath ../Scripts/libsvm-3.19/matlab/
-diffusion_rate_array = [0, linspace(10e-6, 11e-6, 100)];
 result = zeros(length(diffusion_rate_array), 1);
 predictLabel = zeros(length(diffusion_rate_array), 34);
 
-signal_type = 'FA+GM';
 for diffusion_rate_idx = 1:length(diffusion_rate_array)
     
     diffusion_rate = diffusion_rate_array(diffusion_rate_idx);
 
-    [ svm_accuracy, svm_label ] = accuracy_SVM_subgroup( diffusion_rate, signal_type );
+    [ svm_accuracy, svm_label ] = accuracy_SVM_subgroup( diffusion_rate, signal_type, subgroup_type );
     result(diffusion_rate_idx) = svm_accuracy;
     predictLabel(diffusion_rate_idx, :) = svm_label';
 end

@@ -1,4 +1,4 @@
-function [ svm_accuracy, bestLabel] = accuracy_SVM_subgroup( diffusion_rate, signal_type )
+function [ bestAccuracy, bestLabel] = accuracy_SVM_subgroup( diffusion_rate, signal_type, subgroup_type )
 %Using the signal type (degree, closeness, eigenvector, etc) and
 %thediffusion rate to compute the diffused signal signal * (I + \alpha
 %L)^{-1}, and use the diffused signals for all 74 patients to do ward
@@ -23,17 +23,34 @@ switch signal_type
     case {'DC+FA+GM', 'FA+GM'} % DC as shorthand for degree centrality
         temp = load('../RawData_matlab/FA_all.mat');
         FA_all = temp.FA_all(41:74, :);
+        FA_all_mat = cell2mat(FA_all);
+        FA_all = mat2cell(FA_all_mat / max(FA_all_mat), 116 * ones(34, 1));
         temp = load('../RawData_matlab/GM_all.mat');
         GM_all = temp.GM_all(41:74, :);
+        GM_all_mat = cell2mat(GM_all);
+        GM_all = mat2cell(GM_all_mat / max(GM_all_mat), 116 * ones(34, 1));
 end
 
 % Compute diffused signal DATA such that each row corresponds to a subject.
 %
 if strcmp(signal_type, 'DC+FA+GM')
-    data = zeros(34, 3 * 116); % three features
+   data = zeros(34, 3 * 116); % three features
+    % Degree centrality needs to be normalized
+    DC = cell(34, 1);
+    DC_max = 0; 
     for i = 1:34
         network = network_all{i};
-        data(i, 1:116) = sum( network ) * inv(eye(size(network)) + diffusion_rate * network); % DC
+        DC{i} = sum( network );
+        DC_max = max(DC_max, max(DC{i}));
+    end % for i
+    for i = 1:34
+        DC{i} = DC{i} / DC_max;
+    end
+    % Fill in the data with features
+    %
+    for i = 1:34
+        network = network_all{i};
+        data(i, 1:116) = DC{i} * inv(eye(size(network)) + diffusion_rate * network); % DC
         data(i, 117:(2*116)) = FA_all{i}' * inv(eye(size(network)) + diffusion_rate * network); % FA
         data(i, (117+116):(3*116)) = GM_all{i}' * inv(eye(size(network)) + diffusion_rate * network); % GM
     end % for i
@@ -46,30 +63,40 @@ elseif strcmp(signal_type, 'FA+GM')
     end % for i
 else
     data = zeros(34, 116);
+    signal = cell(34, 1);
+    signal_max = 0;
     for i = 1:34
         network = network_all{i};
         switch signal_type
             case 'degree_centrality'
-                signal = sum( network );
+                signal{i} = sum( network );
             case 'closeness_centrality'
-                signal = closeness_centrality( network );
+                signal{i} = closeness_centrality( network );
             case 'eigenvector_centrality'
-                signal = eigen_centrality( network );
+                signal{i} = eigen_centrality( network );
             case 'degree_centrality_nor'
                 N = normalized_adjacencyMatrix( network );
-                signal = sum(N);
+                signal{i} = sum(N);
             case 'closeness_centrality_nor'
                 N = normalized_adjacencyMatrix( network );
-                signal = closeness_centrality(N);
+                signal{i} = closeness_centrality(N);
             case 'eigenvector_centrality_nor'
                 N = normalized_adjacencyMatrix( network );
-                signal = eigen_centrality(N);
+                signal{i} = eigen_centrality(N);
             case {'FA', 'GM'}
-                signal = signal_all{i}';
-            case 'DC+FA+GM'
+                signal{i} = signal_all{i}';
         end % switch
-        
-        data(i, :) = signal * inv(eye(size(network)) + diffusion_rate * network);
+        signal_max = max(signal_max, max(signal{i}));
+    end % for i
+    % Normalize the signal such that the maximum number is 1
+    %
+    for i = 1:34
+        signal{i} = signal{i} / signal_max;
+    end
+    % Fill the data
+    %
+    for i = 1:34
+        data(i, :) = signal{i} * inv(eye(size(network)) + diffusion_rate * network);
     end % for i
 end % if DC+FA+GM
 
@@ -82,8 +109,14 @@ end
 
 % Define labels Y.
 %
-MMSE = xlsread('../RawData/behavior.xlsx');
-label = double(MMSE(:, 8) > 20);
+switch lower(subgroup_type)
+    case 'mmse'
+        fileRead = xlsread('../RawData/behavior.xlsx');
+        label = double(fileRead(:, 8) > 20);
+    case 'path'
+        fileRead = xlsread('../RawData/behavior.xlsx');
+        label = double(fileRead(:, 9));
+end
 
 % Calculate svm accuracy.
 %
@@ -133,5 +166,6 @@ end % C_power
 svm_accuracy = max(max(cv_accuracy));
 [i, j] = find(cv_accuracy == svm_accuracy);
 bestLabel = allLabel{i, j};
+bestAccuracy = svm_accuracy * 34 / 100;
 
 end
